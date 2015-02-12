@@ -317,27 +317,27 @@
         "pk": 1,
         "model": "plans.planquota",
         "fields": {
-            "plan": 3,
-            "value": 3,
-            "quota": 1
+            "plan": 1,
+            "value": 1,
+            "quota": 3
         }
     },
     {
         "pk": 3,
         "model": "plans.planquota",
         "fields": {
-            "plan": 4,
-            "value": 15,
-            "quota": 1
+            "plan": 1,
+            "value": null,
+            "quota": 2 
         }
     },
     {
         "pk": 4,
         "model": "plans.planquota",
         "fields": {
-            "plan": 4,
-            "value": 10,
-            "quota": 2
+            "plan": 1,
+            "value": 3,
+            "quota": 1
         }
     },
     {
