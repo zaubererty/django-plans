@@ -65,8 +65,8 @@ class PlanAdmin(OrderedModelAdmin):
     raw_id_fields = ('customized',)
     actions = [copy_plan, ]
 
-    def queryset(self, request):
-        return super(PlanAdmin, self).queryset(request).select_related('customized')
+    def get_queryset(self, request):
+        return super(PlanAdmin, self).get_queryset(request).select_related('customized')
 
 
 class BillingInfoAdmin(UserLinkMixin, admin.ModelAdmin):
@@ -108,8 +108,8 @@ class OrderAdmin(admin.ModelAdmin):
     actions = [make_order_completed, make_order_invoice]
     inlines = (InvoiceInline, )
 
-    def queryset(self, request):
-        return super(OrderAdmin, self).queryset(request).select_related('plan', 'pricing', 'user')
+    def get_queryset(self, request):
+        return super(OrderAdmin, self).get_queryset(request).select_related('plan', 'pricing', 'user')
 
 
 class InvoiceAdmin(admin.ModelAdmin):
