@@ -55,10 +55,22 @@ try:
              user.userplan.initialize()
         except UserPlan.DoesNotExist:
             return
-
-
 except ImportError:
     pass
+
+
+try:
+    from userena.signals import activation_complete
+    @receiver(activation_complete)
+    def initialize_plan_userene(sender, user, **kwargs):
+        print "User activated the account"
+        try:
+             user.userplan.initialize()
+        except UserPlan.DoesNotExist:
+            return
+except ImportError:
+    pass
+
 
 
 # Hook to django-getpaid if it is installed
@@ -69,3 +81,4 @@ try:
         user_data['email'] = order.user.email
 except ImportError:
     pass
+
