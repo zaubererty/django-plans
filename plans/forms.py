@@ -27,7 +27,8 @@ class CreateOrderForm(forms.ModelForm):
 class BillingInfoForm(forms.ModelForm):
     class Meta:
         model = BillingInfo
-        exclude = ('user',)
+        exclude = ('user', 'name', 'shipping_name', 'shipping_street',
+                   'shipping_zipcode', 'shipping_city')
 
     def clean(self):
         cleaned_data = super(BillingInfoForm, self).clean()
