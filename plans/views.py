@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import date
 
 from django.core.urlresolvers import reverse
 from django.core.exceptions import ImproperlyConfigured
@@ -229,11 +230,18 @@ class CreateOrderView(LoginRequired, CreateView):
                                                   Q(plan__customized=self.request.user) | Q(
                                                       plan__customized__isnull=True)))
 
+        try:
+            # User is not allowed to create new order for Plan when he has different Plan
+            # He should use Plan Change View for this kind of action
+            if not self.request.user.userplan.is_expired() and self.request.user.userplan.plan != self.plan_pricing.plan:
+                raise Http404
+        except UserPlan.DoesNotExist:
+            # There are no default plans when user signed up, so we will create whatever
+            # plan the user selected right now
+            user_plan = UserPlan.objects.create(user=self.request.user,
+                                                plan=self.plan_pricing.plan,
+                                                active=True, expire=date.today())
 
-        # User is not allowed to create new order for Plan when he has different Plan
-        # He should use Plan Change View for this kind of action
-        if not self.request.user.userplan.is_expired() and self.request.user.userplan.plan != self.plan_pricing.plan:
-            raise Http404
 
         self.plan = self.plan_pricing.plan
         self.pricing = self.plan_pricing.pricing

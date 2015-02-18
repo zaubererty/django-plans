@@ -63,7 +63,6 @@ try:
     from userena.signals import activation_complete
     @receiver(activation_complete)
     def initialize_plan_userene(sender, user, **kwargs):
-        print "User activated the account"
         try:
              user.userplan.initialize()
         except UserPlan.DoesNotExist:
