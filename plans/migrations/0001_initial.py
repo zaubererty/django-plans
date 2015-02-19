@@ -4,13 +4,12 @@ from __future__ import unicode_literals
 from django.db import models, migrations
 from decimal import Decimal
 import django_countries.fields
-from django.conf import settings
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ('organizations', '0002_auto_20150218_1604'),
     ]
 
     operations = [
@@ -28,7 +27,7 @@ class Migration(migrations.Migration):
                 ('shipping_street', models.CharField(help_text='optional', max_length=200, verbose_name='street (shipping)', blank=True)),
                 ('shipping_zipcode', models.CharField(help_text='optional', max_length=200, verbose_name='zip code (shipping)', blank=True)),
                 ('shipping_city', models.CharField(help_text='optional', max_length=200, verbose_name='city (shipping)', blank=True)),
-                ('user', models.OneToOneField(verbose_name='user', to=settings.AUTH_USER_MODEL)),
+                ('user', models.OneToOneField(verbose_name='user', to='organizations.Organization')),
             ],
             options={
                 'verbose_name': 'Billing info',
@@ -112,7 +111,7 @@ class Migration(migrations.Migration):
                 ('visible', models.BooleanField(default=True, help_text='Is visible in current offer', db_index=True, verbose_name='visible')),
                 ('created', models.DateTimeField(verbose_name='created', db_index=True)),
                 ('url', models.CharField(help_text='Optional link to page with more information (for clickable pricing table headers)', max_length=200, blank=True)),
-                ('customized', models.ForeignKey(verbose_name='customized', blank=True, to=settings.AUTH_USER_MODEL, null=True)),
+                ('customized', models.ForeignKey(verbose_name='customized', blank=True, to='organizations.Organization', null=True)),
             ],
             options={
                 'ordering': ('order',),
@@ -189,7 +188,7 @@ class Migration(migrations.Migration):
                 ('expire', models.DateField(default=None, null=True, verbose_name='expire', db_index=True, blank=True)),
                 ('active', models.BooleanField(default=True, db_index=True, verbose_name='active')),
                 ('plan', models.ForeignKey(verbose_name='plan', to='plans.Plan')),
-                ('user', models.OneToOneField(verbose_name='user', to=settings.AUTH_USER_MODEL)),
+                ('user', models.OneToOneField(verbose_name='user', to='organizations.Organization')),
             ],
             options={
                 'verbose_name': 'User plan',
@@ -230,7 +229,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='order',
             name='user',
-            field=models.ForeignKey(verbose_name='user', to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(verbose_name='user', to='organizations.Organization'),
             preserve_default=True,
         ),
         migrations.AddField(
@@ -242,7 +241,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='invoice',
             name='user',
-            field=models.ForeignKey(to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(to='organizations.Organization'),
             preserve_default=True,
         ),
     ]
