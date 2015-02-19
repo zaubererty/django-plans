@@ -28,11 +28,11 @@ class AccountActivationView(LoginRequired, TemplateView):
     template_name = 'plans/account_activation.html'
 
     def get_context_data(self, **kwargs):
-        if self.request.user.userplan.active == True or self.request.user.userplan.is_expired():
+        if self.request.plans_user.userplan.active == True or self.request.plans_user.userplan.is_expired():
             raise Http404()
 
         context = super(AccountActivationView, self).get_context_data(**kwargs)
-        errors = self.request.user.userplan.clean_activation()
+        errors = self.request.plans_user.userplan.clean_activation()
 
         if errors['required_to_activate']:
             context['SUCCESSFUL'] = False
@@ -95,7 +95,7 @@ class PlanTableViewBase(PlanTableMixin, ListView):
         if self.request.user.is_authenticated():
             queryset = queryset.filter(
                 Q(available=True, visible=True) & (
-                    Q(customized=self.request.user) | Q(customized__isnull=True)
+                    Q(customized=self.request.plans_user) | Q(customized__isnull=True)
                 )
             )
         else:
@@ -107,7 +107,7 @@ class PlanTableViewBase(PlanTableMixin, ListView):
 
         if self.request.user.is_authenticated():
             try:
-                self.userplan = UserPlan.objects.select_related('plan').get(user=self.request.user)
+                self.userplan = UserPlan.objects.select_related('plan').get(user=self.request.plans_user)
             except UserPlan.DoesNotExist:
                 self.userplan = None
 
@@ -128,7 +128,7 @@ class CurrentPlanView(LoginRequired, PlanTableViewBase):
     template_name = "plans/current.html"
 
     def get_queryset(self):
-        return Plan.objects.filter(userplan__user=self.request.user).prefetch_related('planpricing_set__pricing',
+        return Plan.objects.filter(userplan__user=self.request.plans_user).prefetch_related('planpricing_set__pricing',
                                                                                       'planquota_set__quota')
 
 
@@ -210,7 +210,7 @@ class CreateOrderView(LoginRequired, CreateView):
         return order
 
     def validate_plan(self, plan):
-        validation_errors = plan_validation(self.request.user, plan)
+        validation_errors = plan_validation(self.request.plans_user, plan)
         if validation_errors['required_to_activate'] or validation_errors['other']:
             messages.error(self.request, _(
                 "The selected plan is insufficient for your account. "
@@ -233,12 +233,12 @@ class CreateOrderView(LoginRequired, CreateView):
         try:
             # User is not allowed to create new order for Plan when he has different Plan
             # He should use Plan Change View for this kind of action
-            if not self.request.user.userplan.is_expired() and self.request.user.userplan.plan != self.plan_pricing.plan:
+            if not self.request.plans_user.userplan.is_expired() and self.request.plans_user.userplan.plan != self.plan_pricing.plan:
                 raise Http404
         except UserPlan.DoesNotExist:
             # There are no default plans when user signed up, so we will create whatever
             # plan the user selected right now
-            user_plan = UserPlan.objects.create(user=self.request.user,
+            user_plan = UserPlan.objects.create(user=self.request.plans_user,
                                                 plan=self.plan_pricing.plan,
                                                 active=True, expire=date.today())
 
@@ -249,7 +249,7 @@ class CreateOrderView(LoginRequired, CreateView):
 
     def get_billing_info(self):
         try:
-            return self.request.user.billinginfo
+            return self.request.plans_user.billinginfo
         except BillingInfo.DoesNotExist:
             return None
 
@@ -281,7 +281,7 @@ class CreateOrderView(LoginRequired, CreateView):
         order = self.recalculate(self.get_price() or Decimal('0.0'), self.get_billing_info())
 
         self.object = form.save(commit=False)
-        self.object.user = self.request.user
+        self.object.user = self.request.plans_user
         self.object.plan = self.plan
         self.object.pricing = self.pricing
         self.object.amount = order.amount
@@ -298,7 +298,7 @@ class CreateOrderPlanChangeView(CreateOrderView):
 
     def get_all_context(self):
         self.plan = get_object_or_404(Plan, Q(pk=self.kwargs['pk']) & Q(available=True, visible=True) & (
-            Q(customized=self.request.user) | Q(customized__isnull=True)))
+            Q(customized=self.request.plans_user) | Q(customized__isnull=True)))
         self.pricing = None
 
     def get_policy(self):
@@ -307,8 +307,8 @@ class CreateOrderPlanChangeView(CreateOrderView):
 
     def get_price(self):
         policy = self.get_policy()
-        period = self.request.user.userplan.days_left()
-        return policy.get_change_price(self.request.user.userplan.plan, self.plan, period)
+        period = self.request.plans_user.userplan.days_left()
+        return policy.get_change_price(self.request.plans_user.userplan.plan, self.plan, period)
 
     def get_context_data(self, **kwargs):
         context = super(CreateOrderView, self).get_context_data(**kwargs)
@@ -334,7 +334,7 @@ class OrderView(LoginRequired, DetailView):
 
 
     def get_queryset(self):
-        return super(OrderView, self).get_queryset().filter(user=self.request.user).select_related('plan', 'pricing', )
+        return super(OrderView, self).get_queryset().filter(user=self.request.plans_user).select_related('plan', 'pricing', )
 
 
 class OrderListView(LoginRequired, ListView):
@@ -351,7 +351,7 @@ class OrderListView(LoginRequired, ListView):
 
 
     def get_queryset(self):
-        return super(OrderListView, self).get_queryset().filter(user=self.request.user).select_related('plan',
+        return super(OrderListView, self).get_queryset().filter(user=self.request.plans_user).select_related('plan',
                                                                                                        'pricing', )
 
 
@@ -374,7 +374,7 @@ class OrderPaymentReturnView(LoginRequired, DetailView):
 
 
     def get_queryset(self):
-        return super(OrderPaymentReturnView, self).get_queryset().filter(user=self.request.user)
+        return super(OrderPaymentReturnView, self).get_queryset().filter(user=self.request.plans_user)
 
 
 class BillingInfoRedirectView(LoginRequired, RedirectView):
@@ -385,7 +385,7 @@ class BillingInfoRedirectView(LoginRequired, RedirectView):
 
     def get_redirect_url(self, **kwargs):
         try:
-            BillingInfo.objects.get(user=self.request.user)
+            BillingInfo.objects.get(user=self.request.plans_user)
         except BillingInfo.DoesNotExist:
             return reverse('billing_info_create')
         return reverse('billing_info_update')
@@ -400,7 +400,7 @@ class BillingInfoCreateView(LoginRequired, CreateView):
 
     def form_valid(self, form):
         self.object = form.save(commit=False)
-        self.object.user = self.request.user
+        self.object.user = self.request.plans_user
         self.object.save()
         return HttpResponseRedirect(self.get_success_url())
 
@@ -419,7 +419,7 @@ class BillingInfoUpdateView(LoginRequired, UpdateView):
 
     def get_object(self):
         try:
-            return self.request.user.billinginfo
+            return self.request.plans_user.billinginfo
         except BillingInfo.DoesNotExist:
             raise Http404
 
@@ -436,7 +436,7 @@ class BillingInfoDeleteView(LoginRequired, DeleteView):
 
     def get_object(self):
         try:
-            return self.request.user.billinginfo
+            return self.request.plans_user.billinginfo
         except BillingInfo.DoesNotExist:
             raise Http404
 
@@ -462,7 +462,7 @@ class InvoiceDetailView(LoginRequired, DetailView):
         if self.request.user.is_superuser:
             return super(InvoiceDetailView, self).get_queryset().select_related('order')
         else:
-            return super(InvoiceDetailView, self).get_queryset().filter(user=self.request.user).select_related('order')
+            return super(InvoiceDetailView, self).get_queryset().filter(user=self.request.plans_user).select_related('order')
 
 
 class FakePaymentsView(LoginRequired, SingleObjectMixin, FormView):
@@ -475,7 +475,7 @@ class FakePaymentsView(LoginRequired, SingleObjectMixin, FormView):
 
 
     def get_queryset(self):
-        return super(FakePaymentsView, self).get_queryset().filter(user=self.request.user)
+        return super(FakePaymentsView, self).get_queryset().filter(user=self.request.plans_user)
 
     def dispatch(self, *args, **kwargs):
         if not getattr(settings, 'DEBUG', False):

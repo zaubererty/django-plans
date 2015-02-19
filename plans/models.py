@@ -26,6 +26,7 @@ from plans.enum import Enumeration
 from plans.signals import order_completed, account_activated, account_expired, account_change_plan, account_deactivated
 from .validators import plan_validation
 from plans.taxation.eu import EUTaxationPolicy
+from plans import get_user_model, get_user_model_settings
 
 
 accounts_logger = logging.getLogger('accounts')
@@ -51,7 +52,7 @@ class Plan(OrderedModel):
                                     help_text=_('Is still available for purchase'))
     visible = models.BooleanField(_('visible'), default=True, db_index=True, help_text=_('Is visible in current offer'))
     created = models.DateTimeField(_('created'), db_index=True)
-    customized = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, verbose_name=_('customized'))
+    customized = models.ForeignKey(get_user_model_settings(), null=True, blank=True, verbose_name=_('customized'))
     quotas = models.ManyToManyField('Quota', through='PlanQuota', verbose_name=_('quotas'))
     url = models.CharField(max_length=200, blank=True, help_text=_(
         'Optional link to page with more information (for clickable pricing table headers)'))
@@ -88,7 +89,7 @@ class BillingInfo(models.Model):
     """
     Stores customer billing data needed to issue an invoice
     """
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, verbose_name=_('user'))
+    user = models.OneToOneField(get_user_model_settings(), verbose_name=_('user'))
     tax_number = models.CharField(_('VAT ID'), max_length=200, blank=True, db_index=True)
     name = models.CharField(_('name'), max_length=200, db_index=True)
     street = models.CharField(_('street'), max_length=200)
@@ -138,7 +139,7 @@ class UserPlan(models.Model):
     """
     Currently selected plan for user account.
     """
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, verbose_name=_('user'))
+    user = models.OneToOneField(get_user_model_settings(), verbose_name=_('user'))
     plan = models.ForeignKey('Plan', verbose_name=_('plan'))
     expire = models.DateField(_('expire'), default=None, blank=True, null=True, db_index=True)
     active = models.BooleanField(_('active'), default=True, db_index=True)
@@ -376,7 +377,7 @@ class Order(models.Model):
 
     ])
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name=_('user'))
+    user = models.ForeignKey(get_user_model_settings(), verbose_name=_('user'))
     flat_name = models.CharField(max_length=200, blank=True, null=True)
     plan = models.ForeignKey('Plan', verbose_name=_('plan'), related_name="plan_order")
     pricing = models.ForeignKey('Pricing', blank=True, null=True, verbose_name=_(
@@ -503,7 +504,7 @@ class Invoice(models.Model):
         MONTHLY = 2
         ANNUALLY = 3
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL)
+    user = models.ForeignKey(get_user_model_settings())
     order = models.ForeignKey('Order')
     number = models.IntegerField(db_index=True)
     full_number = models.CharField(max_length=200)
