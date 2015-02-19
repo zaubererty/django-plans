@@ -17,7 +17,7 @@ from django.views.generic.list import ListView
 from itertools import chain
 from plans.importer import import_name
 from plans.mixins import LoginRequired
-from plans.models import UserPlan, PlanPricing, Plan, Order, BillingInfo
+from plans.models import UserPlan, PlanPricing, Plan, Order, BillingInfo, CreditPlan
 from plans.forms import CreateOrderForm, BillingInfoForm, FakePaymentsForm
 from plans.models import Quota, Invoice
 from plans.signals import order_started
@@ -138,6 +138,11 @@ class UpgradePlanView(LoginRequired, PlanTableViewBase):
 
 class PricingView(PlanTableViewBase):
     template_name = "plans/pricing.html"
+
+    def get_context_data(self, **kwargs):
+        context = super(PricingView, self).get_context_data(**kwargs)
+        context['credit_plans'] = CreditPlan.objects.filter(Q(available=True, visible=True))
+        return context
 
 
 class ChangePlanView(LoginRequired, View):
@@ -492,3 +497,80 @@ class FakePaymentsView(LoginRequired, SingleObjectMixin, FormView):
             self.object.save()
             return HttpResponseRedirect(reverse('order_payment_failure', kwargs={'pk': self.object.pk}))
 
+
+class CreateOrderCreditsView(LoginRequired, CreateView):
+    template_name = "plans/create_order.html"
+    form_class = CreateOrderForm
+
+    def get_order(self, amount, billing_info):
+        """
+        Return pre-filled Order
+        """
+        order = Order(pk=-1)
+        order.amount = amount
+        order.currency = self.get_currency()
+        country = getattr(billing_info, 'country', None)
+        if not country is None:
+            country = country.code
+        tax_number = getattr(billing_info, 'tax_number', None)
+
+        # Calculating tax can be complex task (e.g. VIES webservice call)
+        # To ensure that tax calculated on order preview will be the same on final order
+        # tax rate is cached for a given billing data (as this value only depends on it)
+        tax_session_key = "tax_%s_%s" % (tax_number, country)
+
+        tax = self.request.session.get(tax_session_key)
+        if tax is None:
+            taxation_policy = getattr(settings, 'PLANS_TAXATION_POLICY', None)
+            if not taxation_policy:
+                raise ImproperlyConfigured('PLANS_TAXATION_POLICY is not set')
+            taxation_policy = import_name(taxation_policy)
+            tax = str(taxation_policy.get_tax_rate(tax_number, country))
+            # Because taxation policy could return None which clutters with saving this value
+            # into cache, we use str() representation of this value
+            self.request.session[tax_session_key] = tax
+
+        order.tax = Decimal(tax) if tax != 'None' else None
+
+        return order
+
+    def get_all_context(self):
+        self.plan = get_object_or_404(CreditPlan, Q(pk=self.kwargs['pk']) & Q(available=True, visible=True))
+
+    def get_billing_info(self):
+        try:
+            return self.request.plans_user.billinginfo
+        except BillingInfo.DoesNotExist:
+            return None
+
+    def get_currency(self):
+        CURRENCY = getattr(settings, 'PLANS_CURRENCY', '')
+        if len(CURRENCY) != 3:
+            raise ImproperlyConfigured('PLANS_CURRENCY should be configured as 3-letter currency code.')
+        return CURRENCY
+
+    def get_price(self):
+        return self.plan_pricing.price
+
+    def get_context_data(self, **kwargs):
+        context = super(CreateOrderCreditsView, self).get_context_data(**kwargs)
+        self.get_all_context()
+        context['billing_info'] = self.get_billing_info()
+        order = self.get_order(self.plan.price, context['billing_info'])
+        order.credit_plan = self.plan
+        order.currency = self.get_currency()
+        context['object'] = order
+        return context
+
+    def form_valid(self, form):
+        self.get_all_context()
+        order = self.get_order(self.plan.price, self.get_billing_info())
+        self.object = form.save(commit=False)
+        self.object.user = self.request.plans_user
+        self.object.credit_plan = self.plan
+        self.object.amount = order.amount
+        self.object.tax = order.tax
+        self.object.currency = order.currency
+        self.object.save()
+        order_started.send(sender=self.object)
+        return super(ModelFormMixin, self).form_valid(form)

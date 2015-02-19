@@ -4,7 +4,7 @@ from django.conf.urls import patterns, url
 from plans.views import CreateOrderView, OrderListView, InvoiceDetailView, AccountActivationView, \
     OrderPaymentReturnView, CurrentPlanView, UpgradePlanView, OrderView, BillingInfoRedirectView, \
     BillingInfoCreateView, BillingInfoUpdateView, BillingInfoDeleteView, CreateOrderPlanChangeView, ChangePlanView, \
-    PricingView, FakePaymentsView
+    PricingView, FakePaymentsView, CreateOrderCreditsView
 
 urlpatterns = patterns(
     '',
@@ -14,6 +14,7 @@ urlpatterns = patterns(
     url(r'^upgrade/$', UpgradePlanView.as_view(), name='upgrade_plan'),
     url(r'^order/extend/new/(?P<pk>\d+)/$', CreateOrderView.as_view(), name='create_order_plan'),
     url(r'^order/upgrade/new/(?P<pk>\d+)/$', CreateOrderPlanChangeView.as_view(), name='create_order_plan_change'),
+    url(r'^order/credits/new/(?P<pk>\d+)/$', CreateOrderCreditsView.as_view(), name='create_order_credit_plan'),
     url(r'^change/(?P<pk>\d+)/$', ChangePlanView.as_view(), name='change_plan'),
     url(r'^order/$', OrderListView.as_view(), name='order_list'),
     url(r'^order/(?P<pk>\d+)/$', OrderView.as_view(), name='order'),

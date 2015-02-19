@@ -5,7 +5,7 @@ from django.core import urlresolvers
 from ordered_model.admin import OrderedModelAdmin
 from django.utils.translation import ugettext_lazy as _
 
-from .models import UserPlan, Plan, PlanQuota, Quota, PlanPricing, Pricing, Order, BillingInfo
+from .models import UserPlan, Plan, PlanQuota, Quota, PlanPricing, Pricing, Order, BillingInfo, CreditPlan
 from plans.models import Invoice
 
 
@@ -134,6 +134,12 @@ class UserPlanAdmin(UserLinkMixin, admin.ModelAdmin):
     raw_id_fields = ['plan', ]
 
 
+class CreditPlanAdmin(OrderedModelAdmin):
+    search_fields = ('name', )
+    list_filter = ('available', 'visible')
+    list_display = ('__unicode__', 'description', 'available', 'created', 'move_up_down_links')
+
+
 admin.site.register(Quota, QuotaAdmin)
 admin.site.register(Plan, PlanAdmin)
 admin.site.register(UserPlan, UserPlanAdmin)
@@ -141,5 +147,4 @@ admin.site.register(Pricing)
 admin.site.register(Order, OrderAdmin)
 admin.site.register(BillingInfo, BillingInfoAdmin)
 admin.site.register(Invoice, InvoiceAdmin)
-
-
+admin.site.register(CreditPlan, CreditPlanAdmin)

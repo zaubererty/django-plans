@@ -85,6 +85,34 @@ class Plan(OrderedModel):
         return quota_dic
 
 
+class CreditPlan(OrderedModel):
+    """
+    A custom plans to allow users to add one-off credits.
+    """
+    name = models.CharField(_('name'), max_length=100, unique=True)
+    description = models.TextField(_('description'), null=True, blank=True)
+    credits = models.PositiveIntegerField(_('number of credits'))
+    available = models.BooleanField(_('available'), default=False, db_index=True,
+                                    help_text=_('Is still available for purchase'))
+    visible = models.BooleanField(_('visible'), default=True, db_index=True,
+                                  help_text=_('Is visible in current offer'))
+    created = models.DateTimeField(auto_now_add=True)
+    price = models.DecimalField(max_digits=7, decimal_places=2, db_index=True)
+    # currency = models.CharField(max_length=3, default='EUR',
+    #                             choices=CURRENCY_OPTIONS)
+
+    class Meta:
+        verbose_name = _('credit plan')
+        verbose_name_plural = _('credit plans')
+        ordering = ('price', )
+
+    def __unicode__(self):
+        return u"%s: %s" % (self.name, self.get_pricing_display())
+
+    def get_pricing_display(self):
+        return u"%.2f %s" % (self.price, settings.PLANS_CURRENCY)
+
+
 class BillingInfo(models.Model):
     """
     Stores customer billing data needed to issue an invoice
@@ -367,6 +395,8 @@ class Order(models.Model):
 
     If only plan is provided (with pricing set to None) this means that user purchased
     a plan upgrade.
+
+    A order can have either plan or credit_plan, but not both.
     """
     STATUS = Enumeration([
         (1, 'NEW', pgettext_lazy('Order status', 'new')),
@@ -379,9 +409,13 @@ class Order(models.Model):
 
     user = models.ForeignKey(get_user_model_settings(), verbose_name=_('user'))
     flat_name = models.CharField(max_length=200, blank=True, null=True)
-    plan = models.ForeignKey('Plan', verbose_name=_('plan'), related_name="plan_order")
+    plan = models.ForeignKey('Plan', verbose_name=_('plan'), related_name="plan_order",
+                             null=True, blank=True)
     pricing = models.ForeignKey('Pricing', blank=True, null=True, verbose_name=_(
         'pricing'))  # if pricing is None the order is upgrade plan, not buy new pricing
+    credit_plan = models.ForeignKey('CreditPlan', verbose_name=_('credit plan'),
+                                    related_name="plan_order", null=True,
+                                    blank=True)
     created = models.DateTimeField(_('created'), db_index=True)
     completed = models.DateTimeField(_('completed'), null=True, blank=True, db_index=True)
     amount = models.DecimalField(_('amount'), max_digits=7, decimal_places=2, db_index=True)
@@ -391,6 +425,9 @@ class Order(models.Model):
     status = models.IntegerField(_('status'), choices=STATUS, default=STATUS.NEW)
 
     def save(self, force_insert=False, force_update=False, using=None, update_fields=None):
+        assert self.plan or self.credit_plan, _('Neither a plan nor a credit plan is set.')
+        assert (self.plan and not self.credit_plan) or (self.credit_plan and not self.plan), _('You can only choose a plan or credit plan, not both.')
+
         if self.created is None:
             self.created = now()
         return super(Order, self).save(force_insert, force_update, using)
@@ -411,8 +448,15 @@ class Order(models.Model):
         if self.flat_name:
             return self.flat_name
         else:
+            if self.plan:
+                plan = self.plan.name
+                pricing = "(upgrade)" if self.pricing is None else '- %s' % (self.pricing)
+            else:
+                plan = self.credit_plan.name
+                pricing = self.credit_plan.get_pricing_display()
+
             return "%s %s %s " % (
-                _('Plan'), self.plan.name, "(upgrade)" if self.pricing is None else '- %s' % self.pricing)
+                _('Plan'), plan, pricing)
 
 
     def is_ready_for_payment(self):
@@ -421,7 +465,13 @@ class Order(models.Model):
 
     def complete_order(self):
         if self.completed is None:
-            status = self.user.userplan.extend_account(self.plan, self.pricing)
+            if self.plan:
+                # Normal plan
+                status = self.user.userplan.extend_account(self.plan, self.pricing)
+            else:
+                # Credits plan <- TODO: add credits here
+                status = True
+
             self.completed = now()
             if status:
                 self.status = Order.STATUS.COMPLETED
