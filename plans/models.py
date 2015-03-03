@@ -116,8 +116,10 @@ class CreditPlan(OrderedModel):
 class BillingInfo(models.Model):
     """
     Stores customer billing data needed to issue an invoice
+    In espion, all the billing info is attached to organization, so we
+    changed the label for 'user'.
     """
-    user = models.OneToOneField(get_user_model_settings(), verbose_name=_('user'))
+    user = models.OneToOneField(get_user_model_settings(), verbose_name=_('organization'))
     tax_number = models.CharField(_('VAT ID'), max_length=200, blank=True, db_index=True)
     name = models.CharField(_('name'), max_length=200, db_index=True)
     street = models.CharField(_('street'), max_length=200)
@@ -166,8 +168,10 @@ class BillingInfo(models.Model):
 class UserPlan(models.Model):
     """
     Currently selected plan for user account.
+    In espion, all the plans iare attached to organization, so we
+    changed the label for 'user'.
     """
-    user = models.OneToOneField(get_user_model_settings(), verbose_name=_('user'))
+    user = models.OneToOneField(get_user_model_settings(), verbose_name=_('organizations'))
     plan = models.ForeignKey('Plan', verbose_name=_('plan'))
     expire = models.DateField(_('expire'), default=None, blank=True, null=True, db_index=True)
     active = models.BooleanField(_('active'), default=True, db_index=True)
@@ -397,6 +401,9 @@ class Order(models.Model):
     a plan upgrade.
 
     A order can have either plan or credit_plan, but not both.
+
+    In espion, all the orders are attached to organization, so we changed the
+    label for 'user'.
     """
     STATUS = Enumeration([
         (1, 'NEW', pgettext_lazy('Order status', 'new')),
@@ -407,7 +414,7 @@ class Order(models.Model):
 
     ])
 
-    user = models.ForeignKey(get_user_model_settings(), verbose_name=_('user'))
+    user = models.ForeignKey(get_user_model_settings(), verbose_name=_('organization'))
     flat_name = models.CharField(max_length=200, blank=True, null=True)
     plan = models.ForeignKey('Plan', verbose_name=_('plan'), related_name="plan_order",
                              null=True, blank=True)
