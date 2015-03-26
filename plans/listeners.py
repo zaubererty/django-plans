@@ -58,7 +58,7 @@ try:
 except ImportError:
     pass
 
-
+'''
 try:
     from userena.signals import activation_complete
     @receiver(activation_complete)
@@ -69,6 +69,7 @@ try:
             return
 except ImportError:
     pass
+'''
 
 
 
