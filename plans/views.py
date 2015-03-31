@@ -16,7 +16,7 @@ from django.views.generic.list import ListView
 
 from itertools import chain
 from plans.importer import import_name
-from plans.mixins import LoginRequired
+from plans.mixins import LoginRequired, OrgAdminRequired
 from plans.models import UserPlan, PlanPricing, Plan, Order, BillingInfo, CreditPlan
 from plans.forms import CreateOrderForm, BillingInfoForm, FakePaymentsForm
 from plans.models import Quota, Invoice
@@ -178,7 +178,7 @@ class ChangePlanView(LoginRequired, View):
         return HttpResponseRedirect(reverse('upgrade_plan'))
 
 
-class CreateOrderView(LoginRequired, CreateView):
+class CreateOrderView(LoginRequired, OrgAdminRequired, CreateView):
     template_name = "plans/create_order.html"
     form_class = CreateOrderForm
 
@@ -498,7 +498,7 @@ class FakePaymentsView(LoginRequired, SingleObjectMixin, FormView):
             return HttpResponseRedirect(reverse('order_payment_failure', kwargs={'pk': self.object.pk}))
 
 
-class CreateOrderCreditsView(LoginRequired, CreateView):
+class CreateOrderCreditsView(LoginRequired, OrgAdminRequired, CreateView):
     template_name = "plans/create_order.html"
     form_class = CreateOrderForm
 
