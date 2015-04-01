@@ -1,4 +1,4 @@
-from django.contrib.auth.models import User
+from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch.dispatcher import receiver
 from plans.models import Order, Invoice, UserPlan, Plan
@@ -25,7 +25,7 @@ def send_invoice_by_email(sender, instance, created, **kwargs):
         instance.send_invoice_by_email()
 
 
-@receiver(post_save, sender=User)
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def set_default_user_plan(sender, instance, created, **kwargs):
     """
     Creates default plan for the new user but also extending an account for default grace period.
@@ -55,10 +55,22 @@ try:
              user.userplan.initialize()
         except UserPlan.DoesNotExist:
             return
-
-
 except ImportError:
     pass
+
+'''
+try:
+    from userena.signals import activation_complete
+    @receiver(activation_complete)
+    def initialize_plan_userene(sender, user, **kwargs):
+        try:
+             user.userplan.initialize()
+        except UserPlan.DoesNotExist:
+            return
+except ImportError:
+    pass
+'''
+
 
 
 # Hook to django-getpaid if it is installed
@@ -69,3 +81,4 @@ try:
         user_data['email'] = order.user.email
 except ImportError:
     pass
+

@@ -26,6 +26,7 @@ from plans.enum import Enumeration
 from plans.signals import order_completed, account_activated, account_expired, account_change_plan, account_deactivated
 from .validators import plan_validation
 from plans.taxation.eu import EUTaxationPolicy
+from plans import get_user_model, get_user_model_settings
 
 
 accounts_logger = logging.getLogger('accounts')
@@ -51,7 +52,7 @@ class Plan(OrderedModel):
                                     help_text=_('Is still available for purchase'))
     visible = models.BooleanField(_('visible'), default=True, db_index=True, help_text=_('Is visible in current offer'))
     created = models.DateTimeField(_('created'), db_index=True)
-    customized = models.ForeignKey('auth.User', null=True, blank=True, verbose_name=_('customized'))
+    customized = models.ForeignKey(get_user_model_settings(), null=True, blank=True, verbose_name=_('customized'))
     quotas = models.ManyToManyField('Quota', through='PlanQuota', verbose_name=_('quotas'))
     url = models.CharField(max_length=200, blank=True, help_text=_(
         'Optional link to page with more information (for clickable pricing table headers)'))
@@ -86,11 +87,41 @@ class Plan(OrderedModel):
     def is_free(self):
         return self.planpricing_set.count() == 0
 
+class CreditPlan(OrderedModel):
+    """
+    A custom plans to allow users to add one-off credits.
+    """
+    name = models.CharField(_('name'), max_length=100, unique=True)
+    description = models.TextField(_('description'), null=True, blank=True)
+    credits = models.PositiveIntegerField(_('number of credits'))
+    available = models.BooleanField(_('available'), default=False, db_index=True,
+                                    help_text=_('Is still available for purchase'))
+    visible = models.BooleanField(_('visible'), default=True, db_index=True,
+                                  help_text=_('Is visible in current offer'))
+    created = models.DateTimeField(auto_now_add=True)
+    price = models.DecimalField(max_digits=7, decimal_places=2, db_index=True)
+    # currency = models.CharField(max_length=3, default='EUR',
+    #                             choices=CURRENCY_OPTIONS)
+
+    class Meta:
+        verbose_name = _('credit plan')
+        verbose_name_plural = _('credit plans')
+        ordering = ('price', )
+
+    def __unicode__(self):
+        return u"%s: %s" % (self.name, self.get_pricing_display())
+
+    def get_pricing_display(self):
+        return u"%.2f %s" % (self.price, settings.PLANS_CURRENCY)
+
+
 class BillingInfo(models.Model):
     """
     Stores customer billing data needed to issue an invoice
+    In espion, all the billing info is attached to organization, so we
+    changed the label for 'user'.
     """
-    user = models.OneToOneField('auth.User', verbose_name=_('user'))
+    user = models.OneToOneField(get_user_model_settings(), verbose_name=_('organization'))
     tax_number = models.CharField(_('VAT ID'), max_length=200, blank=True, db_index=True)
     name = models.CharField(_('name'), max_length=200, db_index=True)
     street = models.CharField(_('street'), max_length=200)
@@ -139,8 +170,10 @@ class BillingInfo(models.Model):
 class UserPlan(models.Model):
     """
     Currently selected plan for user account.
+    In espion, all the plans iare attached to organization, so we
+    changed the label for 'user'.
     """
-    user = models.OneToOneField('auth.User', verbose_name=_('user'))
+    user = models.OneToOneField(get_user_model_settings(), verbose_name=_('organizations'))
     plan = models.ForeignKey('Plan', verbose_name=_('plan'))
     expire = models.DateField(_('expire'), default=None, blank=True, null=True, db_index=True)
     active = models.BooleanField(_('active'), default=True, db_index=True)
@@ -325,8 +358,8 @@ class Quota(OrderedModel):
 
 
 class PlanPricingManager(models.Manager):
-    def get_query_set(self):
-        return super(PlanPricingManager, self).get_query_set().select_related('plan', 'pricing')
+    def get_queryset(self):
+        return super(PlanPricingManager, self).get_queryset().select_related('plan', 'pricing')
 
 
 @python_2_unicode_compatible
@@ -347,8 +380,8 @@ class PlanPricing(models.Model):
 
 
 class PlanQuotaManager(models.Manager):
-    def get_query_set(self):
-        return super(PlanQuotaManager, self).get_query_set().select_related('plan', 'quota')
+    def get_queryset(self):
+        return super(PlanQuotaManager, self).get_queryset().select_related('plan', 'quota')
 
 
 class PlanQuota(models.Model):
@@ -372,6 +405,11 @@ class Order(models.Model):
 
     If only plan is provided (with pricing set to None) this means that user purchased
     a plan upgrade.
+
+    A order can have either plan or credit_plan, but not both.
+
+    In espion, all the orders are attached to organization, so we changed the
+    label for 'user'.
     """
     STATUS = Enumeration([
         (1, 'NEW', pgettext_lazy('Order status', 'new')),
@@ -382,11 +420,15 @@ class Order(models.Model):
 
     ])
 
-    user = models.ForeignKey('auth.User', verbose_name=_('user'))
+    user = models.ForeignKey(get_user_model_settings(), verbose_name=_('organization'))
     flat_name = models.CharField(max_length=200, blank=True, null=True)
-    plan = models.ForeignKey('Plan', verbose_name=_('plan'), related_name="plan_order")
+    plan = models.ForeignKey('Plan', verbose_name=_('plan'), related_name="plan_order",
+                             null=True, blank=True)
     pricing = models.ForeignKey('Pricing', blank=True, null=True, verbose_name=_(
         'pricing'))  # if pricing is None the order is upgrade plan, not buy new pricing
+    credit_plan = models.ForeignKey('CreditPlan', verbose_name=_('credit plan'),
+                                    related_name="plan_order", null=True,
+                                    blank=True)
     created = models.DateTimeField(_('created'), db_index=True)
     completed = models.DateTimeField(_('completed'), null=True, blank=True, db_index=True)
     amount = models.DecimalField(_('amount'), max_digits=7, decimal_places=2, db_index=True)
@@ -396,6 +438,9 @@ class Order(models.Model):
     status = models.IntegerField(_('status'), choices=STATUS, default=STATUS.NEW)
 
     def save(self, force_insert=False, force_update=False, using=None, update_fields=None):
+        assert self.plan or self.credit_plan, _('Neither a plan nor a credit plan is set.')
+        assert (self.plan and not self.credit_plan) or (self.credit_plan and not self.plan), _('You can only choose a plan or credit plan, not both.')
+
         if self.created is None:
             self.created = now()
         return super(Order, self).save(force_insert, force_update, using)
@@ -416,8 +461,15 @@ class Order(models.Model):
         if self.flat_name:
             return self.flat_name
         else:
+            if self.plan:
+                plan = self.plan.name
+                pricing = "(upgrade)" if self.pricing is None else '- %s' % (self.pricing)
+            else:
+                plan = self.credit_plan.name
+                pricing = self.credit_plan.get_pricing_display()
+
             return "%s %s %s " % (
-                _('Plan'), self.plan.name, "(upgrade)" if self.pricing is None else '- %s' % self.pricing)
+                _('Plan'), plan, pricing)
 
 
     def is_ready_for_payment(self):
@@ -426,7 +478,13 @@ class Order(models.Model):
 
     def complete_order(self):
         if self.completed is None:
-            status = self.user.userplan.extend_account(self.plan, self.pricing)
+            if self.plan:
+                # Normal plan
+                status = self.user.userplan.extend_account(self.plan, self.pricing)
+            else:
+                # Credits plan <- TODO: add credits here
+                status = True
+
             self.completed = now()
             if status:
                 self.status = Order.STATUS.COMPLETED
@@ -470,18 +528,18 @@ class Order(models.Model):
 
 
 class InvoiceManager(models.Manager):
-    def get_query_set(self):
-        return super(InvoiceManager, self).get_query_set().filter(type=Invoice.INVOICE_TYPES['INVOICE'])
+    def get_queryset(self):
+        return super(InvoiceManager, self).get_queryset().filter(type=Invoice.INVOICE_TYPES['INVOICE'])
 
 
 class InvoiceProformaManager(models.Manager):
-    def get_query_set(self):
-        return super(InvoiceProformaManager, self).get_query_set().filter(type=Invoice.INVOICE_TYPES['PROFORMA'])
+    def get_queryset(self):
+        return super(InvoiceProformaManager, self).get_queryset().filter(type=Invoice.INVOICE_TYPES['PROFORMA'])
 
 
 class InvoiceDuplicateManager(models.Manager):
-    def get_query_set(self):
-        return super(InvoiceDuplicateManager, self).get_query_set().filter(type=Invoice.INVOICE_TYPES['DUPLICATE'])
+    def get_queryset(self):
+        return super(InvoiceDuplicateManager, self).get_queryset().filter(type=Invoice.INVOICE_TYPES['DUPLICATE'])
 
 
 @python_2_unicode_compatible
@@ -509,7 +567,7 @@ class Invoice(models.Model):
         MONTHLY = 2
         ANNUALLY = 3
 
-    user = models.ForeignKey('auth.User')
+    user = models.ForeignKey(get_user_model_settings())
     order = models.ForeignKey('Order')
     number = models.IntegerField(db_index=True)
     full_number = models.CharField(max_length=200)

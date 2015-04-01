@@ -13,16 +13,15 @@ def account_status(request):
      * ``EXPIRE_IN_DAYS = integer``, number of days to account expiration,
      * ``EXTEND_URL = string``, URL to account extend page.
      * ``ACTIVATE_URL = string``, URL to account activation needed if  account is not active
-
     """
 
     if request.user.is_authenticated():
         try:
             return {
-                'ACCOUNT_EXPIRED': request.user.userplan.is_expired(),
+                'ACCOUNT_EXPIRED': request.plans_user.userplan.is_expired(),
                 'ACCOUNT_NOT_ACTIVE': (
-                not request.user.userplan.is_active() and not request.user.userplan.is_expired()),
-                'EXPIRE_IN_DAYS': request.user.userplan.days_left(),
+                not request.plans_user.userplan.is_active() and not request.plans_user.userplan.is_expired()),
+                'EXPIRE_IN_DAYS': request.plans_user.userplan.days_left(),
                 'EXTEND_URL': reverse('current_plan'),
                 'ACTIVATE_URL': reverse('account_activation'),
             }
